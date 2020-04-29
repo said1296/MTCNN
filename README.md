@@ -3,4 +3,6 @@ Modified version of the Multi-task Cascade Neural Network architecture for face 
 
 
 ![](mtcnn-cut.png)
-![](mtcnn-cut2.png)
+![](mtcnn-cut-2.png)
+![](mtcnn-cut-3.png)
+![](mtcnn-cut-4.png)

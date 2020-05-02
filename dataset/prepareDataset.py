@@ -1,4 +1,4 @@
-from utils import imagesLister, imagesResizer, imShowRectangles, iou
+from dataset.utils import imagesLister, imagesResizer, imShowRectangles, iou
 import re
 import os
 import numpy as np
@@ -8,41 +8,36 @@ from math import sqrt, floor, ceil
 import tensorflow as tf
 from random import shuffle
 
-size=24
+# Negatives: 417800
+# Positives: 202160
+# Partials: 202160
+
 trainDir=os.getcwd()+"/dataset/train/"
 
-def prepareDataset(parseGroundTruthsFlag=False, pnetFlag=False, limit=False):
-    positiveImagesFolder    =   trainDir+"positiveImages"
-    negativeImagesFolder    =   trainDir+"negativeImages"
-    partialImagesFolder     =   trainDir+"partialImages"
-
-    if not os.path.exists(negativeImagesFolder):
-        os.mkdir(negativeImagesFolder)
-    negativeImagesFile  =   open(os.path.join(negativeImagesFolder, "negativeImages.txt"),'w')
-    negativeId=0
-
-    if not os.path.exists(positiveImagesFolder):
-        os.mkdir(positiveImagesFolder)
-    if not os.path.exists(partialImagesFolder):
-        os.mkdir(partialImagesFolder)
-    positiveImagesFile  =   open(os.path.join(positiveImagesFolder, "positiveImages.txt"), 'w')
-    partialImagesFile   =   open(os.path.join(partialImagesFolder, "partialImages.txt"),'w')
-    positiveId=0
-    partialId=0
+def prepareDataset(parseGroundTruthsFlag=False, size=24, limit=False):
+    numpyFolder=os.getcwd()+"/dataset/numpy/"
 
     if(parseGroundTruthsFlag):
         parseGroundTruths()
 
+    c=0
+    for line in open(trainDir+'groundTruthsParsed.txt'):
+        c+=1
+    totalRecords=c
+
+    if(limit):
+        totalRecords=limit
+
     groundTruthsParsed = open(os.path.join(trainDir,"groundTruthsParsed.txt"), 'r')
-    negativeImages=[]
-    negativeClassification=[]
-    positiveImages=[]
-    positiveClassification=[]
-    positiveBoxOffsets=[]
-    partialImages=[]
-    partialBoxOffsets=[]
+    negativesList=[]
+    positivesList=[]
+    partialsList=[]
     #Parse ground truths to np arrays
+    percentage=0
     for index, groundTruth in enumerate(groundTruthsParsed):
+        if(floor((index*100)/totalRecords)>percentage):
+            percentage=floor((index*100)/totalRecords)
+            print("Records processed: %d%%" % percentage)
         if(limit and limit==index):
             break
         groundTruthArray = groundTruth.split(' ')
@@ -57,10 +52,8 @@ def prepareDataset(parseGroundTruthsFlag=False, pnetFlag=False, limit=False):
 
         #Prcess non-faces (negatives), they have less than 20% iou with the groundtruthboxes
         negatives=0
-        negativesPerImage=50
+        negativesPerImage=40
         notFoundIteration=0
-        if(negativeId%100==0):
-            print("Negatives: %d" % negativeId) #Print count of negatives
         while negatives<negativesPerImage:
             notFoundIteration+=1
             sizeCrop = random(40, min(widthImage,heightImage))
@@ -70,17 +63,18 @@ def prepareDataset(parseGroundTruthsFlag=False, pnetFlag=False, limit=False):
             #imShowRectangles(imageTest, [cropImage,groundTruthBoxes], color=(100,50,255), labels=['IoU: %f' % iou(cropImage,groundTruthBoxes,True), ['Ground']])
             iouValue=iou(cropImage,groundTruthBoxes)
             if(notFoundIteration>10000):
+                imageCopped=imageTest[yCrop: yCrop+sizeCrop, xCrop:xCrop+sizeCrop, :]
                 #imShowRectangles(imageCropped, croppedBoxes, color=(100,50,255), windowName=trainDir+'images/'+groundTruthArray[0])
-                imShowRectangles(imageTest, [cropImage,groundTruthBoxes], color=(100,50,255), labels=['IoU: %f' % iou(cropImage,groundTruthBoxes,True), 'Ground'])
+                imShowRectangles(imageTest, [cropImage,groundTruthBoxes], windowName='NOT FOUND NEGATIVES', color=(100,50,255), labels=['IoU: %f' % iou(cropImage,groundTruthBoxes,True), 'Ground'])
+                imShowRectangles(imageCropped, [[0,0,0,0]],  color=(100,50,255), windowName=trainDir+'images/'+groundTruthArray[0])
                 notFoundIteration=0
             if(iouValue<20 and negatives<negativesPerImage):
                 imageCropped=imageTest[yCrop:yCrop+sizeCrop, xCrop:xCrop+sizeCrop, :]
                 #imShowRectangles(imageCropped, [croppedBoxes], color=(100,50,255))
                 imageCropped=cv2.resize(imageCropped, (size,size))
-                negativeImages.append(imageCropped)
-                negativeClassification.append(np.array([0,1]))
+                data=np.array([imageCropped, np.array([0, 1]), np.array([0, 0, 0, 0])])
+                negativesList.append(data)
                 negatives+=1
-                negativeId+=1
 
         #Process positives and partial faces
         positivesPerBox = 10
@@ -96,38 +90,36 @@ def prepareDataset(parseGroundTruthsFlag=False, pnetFlag=False, limit=False):
                 yCrop = random(max(0,ceil(yBox+0.4*heightBox-sizeCrop)), min(heightImage,floor(yBox+0.6*heightBox)))
                 cropImage = [xCrop, yCrop, sizeCrop]
                 if(notFoundIteration>10000):
-                    imShowRectangles(imageTest, [cropImage,groundTruthBoxes], color=(100,50,255), labels=['IoU: %f' % iou(cropImage,groundTruthBoxes,True), 'Ground'])
-                    imShowRectangles(imageCropped, groundTruthBox, color=(100,50,255), windowName=trainDir+'images/'+groundTruthArray[0])
+                    imageCopped=imageTest[yCrop: yCrop+sizeCrop, xCrop:xCrop+sizeCrop, :]
+                    imShowRectangles(imageTest, [cropImage,groundTruthBoxes], windowName='NOT FOUND POSITIVES PARTIALS', color=(100,50,255), labels=['IoU: %f' % iou(cropImage,groundTruthBoxes,True), 'Ground'])
+                    imShowRectangles(imageCropped, [groundTruthBox], color=(100,50,255), windowName=trainDir+'images/'+groundTruthArray[0])
                     notFoundIteration=0
                 notFoundIteration+=1
                 iouValue=iou(cropImage,groundTruthBoxes)
                 imageCropped=imageTest[yCrop:yCrop+sizeCrop, xCrop:xCrop+sizeCrop, :]
                 if(iouValue>=65 and positives<positivesPerBox):
                     #imShowRectangles(imageCropped, croppedBoxes, color=(100,50,255))
-                    positiveImagesFile.write('\n%s/%d.jpg' % (positiveImagesFolder, positiveId))
-                    offsets=np.asarray(getOffsets(cropImage, groundTruthBox))/sizeCrop #get the offset of the box with respect to the crop and normalize coordinates to percentage of sizeCrop
-                    positiveImagesFile.write(' %f %f %f %f' % (offsets[0], offsets[1], offsets[2], offsets[3]))
+                    offsets=np.array(getOffsets(cropImage, groundTruthBox))/sizeCrop #get the offset of the box with respect to the crop and normalize coordinates to percentage of sizeCrop
                     imageCropped=cv2.resize(imageCropped, (size,size))
-                    positiveImages.append(imageCropped)
-                    positiveClassification.append(np.array([1,0]))
-                    positiveBoxOffsets.append(offsets)
+                    data=np.array([imageCropped, np.array([1, 0]), offsets])
+                    positivesList.append(data)
                     positives+=1
-                    positiveId+=1
-                    if(positiveId%100==0):
-                        print("Positives: %d" % positiveId)
                 elif(iouValue>=40 and partials<partialsPerBox):
                     #imShowRectangles(imageCropped, croppedBoxes, color=(100,50,255))
                     offsets=np.asarray(getOffsets(cropImage, groundTruthBox))/sizeCrop #get the offset of the box with respect to the crop and normalize coordinates to percentage of sizeCrop
                     imageCropped=cv2.resize(imageCropped, (size,size))
-                    partialImages.append(imageCropped)
-                    partialBoxOffsets.append(offsets)
+                    data=np.array([imageCropped, np.array([1, 0]), offsets])
+                    partialsList.append(data)
                     partials+=1
-                    partialId+=1
-                    if(partialId%100==0):
-                        print("Partials: %d" % partialId)
 
     print("Generating numpy files...")
-    
+    negativesAsNpy=np.array(negativesList)
+    np.save(numpyFolder+'negativesDataset'+str(size)+'.npy', negativesAsNpy)
+    positivesAsNpy=np.array(positivesList)
+    np.save(numpyFolder+'positivesDataset'+str(size)+'.npy', positivesAsNpy)
+    partialsAsNpy=np.array(partialsList)
+    np.save(numpyFolder+'partialsDataset'+str(size)+'.npy', partialsAsNpy)
+    print("Successfully processsed\nNegatives: %d\nPositives: %d\nPartials: %d" % (len(negativesAsNpy), len(positivesAsNpy), len(partialsAsNpy)))
             
 
 def getOffsets(cropImage, box):
@@ -139,7 +131,7 @@ def getOffsets(cropImage, box):
     yOffsetStart=max(0,yBox-yCrop)
     xOffsetEnd=xOffsetStart+widthBoxCropped
     yOffsetEnd=yOffsetStart+heightBoxCropped
-    offsets=[xOffsetStart, yOffsetStart, xOffsetStart, xOffsetEnd]
+    offsets=[xOffsetStart, yOffsetStart, xOffsetEnd, yOffsetEnd]
     return offsets
 
 def parseGroundTruths():
@@ -162,5 +154,3 @@ def _bytes_feature(value):
     """Returns a bytes_list from a string / byte."""
     value=value.tostring()
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
-
-prepareDataset(False, True, 10000)

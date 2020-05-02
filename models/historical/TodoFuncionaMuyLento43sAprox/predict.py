@@ -6,9 +6,8 @@ import numpy as np
 from dataset.utils import drawRectangle, imShowRectangles, iou
 from math import floor, ceil
 import time
-from predictWebcam import joinSupression, densitySupression
 
-def predict(threshold=0.9, nmsThreshold=0.5, modelDir=os.getcwd()+"/models/", kernelSize=12, stride=2, imagePath=os.getcwd()+'/predict.jpg', minFace=20, scaleFactor=0.709):
+def predict(threshold=0.9, nmsThreshold=0.1, modelDir=os.getcwd()+"/models/", kernelSize=24, stride=4, imagePath=os.getcwd()+'/predict.jpg', minFace=25, scaleFactor=0.709):
     startTime=time.perf_counter()
     modelPath=modelDir+"pnetModel.h5"
     pnetModel=tf.keras.models.load_model(modelPath)
@@ -45,7 +44,6 @@ def predict(threshold=0.9, nmsThreshold=0.5, modelDir=os.getcwd()+"/models/", ke
     print("AAAAAAA", sys.getsizeof(toPredict))
     prediction=pnetModel.predict(toPredict)
     print("prediction finished")
-    print(prediction)
 
     boxes=[]
     classifications=[]
@@ -65,24 +63,16 @@ def predict(threshold=0.9, nmsThreshold=0.5, modelDir=os.getcwd()+"/models/", ke
                     classifications.append(classification)
                 predictionCount+=1
     print("FINISHED BOXES")
-    imShowRectangles(image, [boxes], coords=True, thickness=1, windowName="RAW")  
     boxes=nonMaximumSupression(boxes, classifications, nmsThreshold)
-    imShowRectangles(image, [boxes], coords=True, thickness=1, windowName="NMS")  
-    boxes=joinSupression(boxes, threshold=0.6)
-    imShowRectangles(image, [boxes], coords=True, thickness=1, windowName="Join")
-    boxes,_=densitySupression(boxes, classifications)
-    imShowRectangles(image, [boxes], coords=True, thickness=1, windowName="Density supression")
     endTime=time.perf_counter()
     totalTime=endTime-startTime
     print("TOTAL PREDICTION TIME: ", totalTime)
-    #imShowRectangles(image, [boxes], coords=True, thickness=1)
-    cv2.waitKey(0)
+    imShowRectangles(image, [boxes], coords=True, thickness=1)  
     return
 
 def nonMaximumSupression(boxes, classifications, threshold):
     purgedBoxes=[]
     boxes=np.array(boxes)
-    print(len(boxes))
     while(len(boxes)>0):
         maxIndex=np.argmax(classifications)
         purgedBoxes.append(boxes[maxIndex])
@@ -91,6 +81,7 @@ def nonMaximumSupression(boxes, classifications, threshold):
         indexesSupression=iou(purgedBoxes[-1], boxes, threshold=threshold, coords=True)
         boxes=np.delete(boxes, indexesSupression, axis=0)
         classifications=np.delete(classifications, indexesSupression, axis=0)
+    print(len(purgedBoxes))
     return purgedBoxes
         
 
@@ -111,5 +102,3 @@ def getScales(scaleFactor, kernelSize, minFace, imageWidth, imageHeight):
         factorCount+=1
 
     return scales
-
-predict(nmsThreshold=0.8, threshold=0.99)

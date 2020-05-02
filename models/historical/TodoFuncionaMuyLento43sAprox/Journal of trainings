@@ -1,0 +1,36 @@
+1st pass
+	Type: boxRegression
+	loss_weight: [0, 1]
+	Batch: 500
+	Epochs: 10
+	BoxRegression accuracy: 0.7
+	Accuracy on first epoch: 0.4
+
+2nd pass
+	Type: classification
+	loss_weight: [1, 0]
+	Batch: 500
+	Epochs: 10
+	Classification accuracy: 0.96
+	Accuracy on first epoch: 0.9305
+
+3rd pass
+	Type: boxRegression
+	loss_weight: [0.1, 1]
+	Batch: 500
+	Epochs: 10
+	BoxRegression accuracy: 0.7224
+	Accuracy on first epoch: 0.6406
+	All faces were recognized as 1, a 0.1 loss_weight over so many samples messed the previous classification training
+
+4th pass
+	Type: classification
+	loss_weight: [1, 0]
+	Batch: 500
+	Epochs: 1
+	Classification accuracy: 0.9367
+	Predicts both tasks ok, sometimes box is too big.
+
+Pruebas:
+43 segundos en la imagen de prueba con kernel=24, minFace=40, scaleFactor=0.7
+0.02s por predicción
